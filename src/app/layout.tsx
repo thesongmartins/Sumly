@@ -3,11 +3,11 @@ import { Inter, Newsreader } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const newsreader = Newsreader({ 
-  subsets: ["latin"], 
+const newsreader = Newsreader({
+  subsets: ["latin"],
   style: ["normal", "italic"],
   variable: "--font-newsreader",
-  adjustFontFallback: false
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {

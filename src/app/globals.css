@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Extension's exact deep navy/purple background */
+  --background: #0f0f23; 
+  /* Soft, warm off-white text for a human, readable feel instead of harsh pure white */
+  --foreground: #fcfaf8; 
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  overflow-x: hidden;
+}
+
+/* Typography styles */
+.font-serif {
+  font-family: var(--font-newsreader), serif;
+}
+
+.font-sans {
+  font-family: var(--font-inter), sans-serif;
+}
+
+/* Elegant dark glass for human aesthetic */
+.elegant-glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+.elegant-glass-card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+}
+
+/* Organic, soft glowing background matching the extension's gradient */
+.bg-mesh-dark {
+  background-color: #0f0f23;
+  background-image: 
+    radial-gradient(at 0% 0%, hsla(240, 40%, 15%, 0.6) 0, transparent 40%), 
+    radial-gradient(at 100% 0%, hsla(240, 30%, 12%, 0.5) 0, transparent 40%), 
+    radial-gradient(at 50% 100%, hsla(47, 100%, 50%, 0.05) 0, transparent 50%); /* Subtle gold glow at bottom */
+}
+
+/* Extension's signature yellow/gold */
+.text-signature-gold {
+  color: #ffd60a;
+}

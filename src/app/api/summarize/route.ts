@@ -153,8 +153,12 @@ ${safeContent}`;
     // Call Gemini API
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // Read model from environment or fallback to a valid free-tier model
+    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+    
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-lite",
+      model: modelName,
       systemInstruction: systemPrompt,
       generationConfig: {
         responseMimeType: "application/json",

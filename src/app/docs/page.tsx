@@ -111,8 +111,12 @@ export default function Docs() {
                 and paste your key:
               </p>
               <pre className="bg-[#0f0f23] text-stone-300 p-4 rounded-xl text-sm overflow-x-auto border border-white/10">
-                <code>GEMINI_API_KEY=your_key_here</code>
+                <code>GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-3.1-pro</code>
               </pre>
+              <p className="text-sm mt-2">
+                (Optional) You can change <code className="bg-white/10 px-1 py-0.5 rounded">GEMINI_MODEL</code> to any other supported model, like <code className="bg-white/10 px-1 py-0.5 rounded">gemini-2.5-pro</code>. If you leave it out, it defaults to <code className="bg-white/10 px-1 py-0.5 rounded">gemini-3.1-pro</code>.
+              </p>
               <div className="bg-[#ffd60a]/10 border border-[#ffd60a]/20 p-4 rounded-xl text-sm text-stone-200 flex gap-3 mt-2">
                 <div className="font-bold text-xl mt-[-2px] text-signature-gold">
                   !

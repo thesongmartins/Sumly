@@ -23,7 +23,7 @@ Sumly/
 │   ├── layout.tsx
 │   ├── page.tsx                ← Server status homepage
 │   └── api/summarize/
-│       └── route.ts            ← POST /api/summarize (calls Claude AI)
+│       └── route.ts            ← POST /api/summarize (calls Gemini API)
 │
 ├── .env.example                ← Copy to .env.local, add your API key
 ├── .env.local                  ← YOUR API KEY GOES HERE (never commit this)

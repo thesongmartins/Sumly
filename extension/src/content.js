@@ -1,17 +1,13 @@
-// content.js — Extracts clean, readable content from the page
+// Content script — extracts clean, readable content and highlights phrases.
 
 (function () {
   "use strict";
 
-  /**
-   * Heuristic-based content extractor.
-   * Priority order: <article>, [role=main], <main>, largest text block.
-   */
+  // Priority order: <article>, [role=main], <main>, then the largest text block.
   function extractContent() {
     const title = document.title || "";
     const url = window.location.href;
 
-    // Remove noise elements before extracting
     const noiseSelectors = [
       "nav",
       "header",
@@ -40,14 +36,13 @@
       "iframe",
     ];
 
-    // Clone body to avoid mutating DOM
+    // Clone so removing noise doesn't mutate the live DOM.
     const bodyClone = document.body.cloneNode(true);
 
     noiseSelectors.forEach((sel) => {
       bodyClone.querySelectorAll(sel).forEach((el) => el.remove());
     });
 
-    // Priority selectors for main content
     const contentSelectors = [
       "article",
       "[role='main']",
@@ -63,32 +58,39 @@
 
     let contentEl = null;
     for (const sel of contentSelectors) {
-      contentEl = bodyClone.querySelector(sel);
-      if (contentEl && contentEl.innerText.trim().length > 200) break;
+      const el = bodyClone.querySelector(sel);
+      // Read innerText once — each access forces a reflow.
+      if (el && el.innerText.trim().length > 200) {
+        contentEl = el;
+        break;
+      }
     }
 
-    // Fallback: find the element with the most text
-    if (!contentEl || contentEl.innerText.trim().length < 200) {
-      const candidates = Array.from(bodyClone.querySelectorAll("div, section"))
-        .filter((el) => el.innerText.trim().length > 200)
-        .sort((a, b) => b.innerText.trim().length - a.innerText.trim().length);
-      contentEl = candidates[0] || bodyClone;
+    // Fallback: largest text block. Cache innerText length to avoid reflows.
+    if (!contentEl) {
+      let best = null;
+      let bestLen = 200;
+      bodyClone.querySelectorAll("div, section").forEach((el) => {
+        const len = el.innerText.trim().length;
+        if (len > bestLen) {
+          bestLen = len;
+          best = el;
+        }
+      });
+      contentEl = best || bodyClone;
     }
 
     let rawText = contentEl ? contentEl.innerText : bodyClone.innerText;
-
-    // Clean up whitespace
     rawText = rawText
       .replace(/\n{3,}/g, "\n\n")
       .replace(/[ \t]{2,}/g, " ")
       .trim();
 
-    // Limit to ~6000 words to keep API costs reasonable
+    // Cap at ~6000 words to keep API cost/latency reasonable.
     const words = rawText.split(/\s+/);
     const truncated = words.slice(0, 6000).join(" ");
     const wasTruncated = words.length > 6000;
 
-    // Extract meta description as bonus context
     const metaDesc =
       document
         .querySelector('meta[name="description"]')
@@ -104,13 +106,8 @@
     };
   }
 
-  /**
-   * Highlights text on the page.
-   * Safely injects highlight spans avoiding XSS.
-   */
   function highlightText(phrases) {
-    // Remove old highlights first
-    document.querySelectorAll(".pagemind-highlight").forEach((el) => {
+    document.querySelectorAll(".sumly-highlight").forEach((el) => {
       const text = document.createTextNode(el.textContent);
       el.parentNode.replaceChild(text, el);
     });
@@ -118,24 +115,23 @@
     if (!phrases || phrases.length === 0) return;
 
     const style = document.createElement("style");
-    style.id = "pagemind-styles";
+    style.id = "sumly-styles";
     style.textContent = `
-      .pagemind-highlight {
+      .sumly-highlight {
         background: linear-gradient(120deg, #ffd60a55 0%, #ffd60a99 100%);
         border-radius: 3px;
         padding: 1px 2px;
         transition: background 0.2s ease;
       }
-      .pagemind-highlight:hover {
+      .sumly-highlight:hover {
         background: linear-gradient(120deg, #ffd60a99 0%, #ffd60add 100%);
       }
     `;
 
-    const existingStyle = document.getElementById("pagemind-styles");
+    const existingStyle = document.getElementById("sumly-styles");
     if (existingStyle) existingStyle.remove();
     document.head.appendChild(style);
 
-    // Walk text nodes and highlight matches
     const walker = document.createTreeWalker(
       document.body,
       NodeFilter.SHOW_TEXT,
@@ -176,8 +172,8 @@
             );
           }
           const span = document.createElement("span");
-          span.className = "pagemind-highlight";
-          span.textContent = match[1]; // Safe: textContent not innerHTML
+          span.className = "sumly-highlight";
+          span.textContent = match[1]; // textContent, not innerHTML — XSS-safe
           frag.appendChild(span);
           lastIndex = regex.lastIndex;
         }
@@ -192,15 +188,14 @@
   }
 
   function clearHighlights() {
-    document.querySelectorAll(".pagemind-highlight").forEach((el) => {
+    document.querySelectorAll(".sumly-highlight").forEach((el) => {
       const text = document.createTextNode(el.textContent);
       el.parentNode.replaceChild(text, el);
     });
-    const style = document.getElementById("pagemind-styles");
+    const style = document.getElementById("sumly-styles");
     if (style) style.remove();
   }
 
-  // Listen for messages from popup / background
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "EXTRACT_CONTENT") {
       try {
@@ -220,6 +215,6 @@
       clearHighlights();
       sendResponse({ success: true });
     }
-    return true; // Keep message channel open for async
+    return true; // keep the message channel open for the async response
   });
 })();

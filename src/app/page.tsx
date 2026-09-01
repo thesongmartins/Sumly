@@ -1,6 +1,3 @@
-"use client";
-
-import { motion } from "framer-motion";
 import {
   Sparkles,
   BookOpen,
@@ -8,31 +5,11 @@ import {
   Server,
   ArrowRight,
 } from "lucide-react";
-import { Variants } from "framer-motion";
+import { Reveal, Stagger, StaggerItem } from "@/components/motion";
 
 export default function Home() {
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.15,
-      },
-    },
-  };
-
-  const itemVariants: Variants = {
-    hidden: { opacity: 0, y: 15 },
-    visible: {
-      opacity: 1,
-      y: 0,
-      transition: { duration: 0.8, ease: [0.16, 1, 0.3, 1] },
-    },
-  };
-
   return (
     <main className="min-h-screen bg-mesh-dark text-stone-100 relative flex flex-col items-center overflow-x-hidden selection:bg-[#ffd60a] selection:text-[#0f0f23]">
-      {/* Navbar */}
       <nav className="w-full max-w-5xl mx-auto px-6 py-8 flex justify-between items-center z-10">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center shadow-sm border border-white/10">
@@ -58,40 +35,27 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <motion.section
-        className="flex-1 flex flex-col items-center justify-center text-center px-6 mt-16 z-10 max-w-3xl mx-auto"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
-        <motion.div
-          variants={itemVariants}
-          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 text-xs font-medium text-stone-300 mb-8 border border-white/10 shadow-sm"
-        >
+      <Stagger className="flex-1 flex flex-col items-center justify-center text-center px-6 mt-16 z-10 max-w-3xl mx-auto">
+        <StaggerItem className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/5 text-xs font-medium text-stone-300 mb-8 border border-white/10 shadow-sm">
           <span>Powered by Gemini 2.0</span>
-        </motion.div>
+        </StaggerItem>
 
-        <motion.h1
-          variants={itemVariants}
-          className="font-serif text-5xl md:text-7xl font-normal tracking-tight mb-6 leading-[1.1] text-stone-100"
-        >
-          Understand any page in{" "}
-          <i className="text-signature-gold font-serif">seconds.</i>
-        </motion.h1>
+        <StaggerItem className="font-serif text-5xl md:text-7xl font-normal tracking-tight mb-6 leading-[1.1] text-stone-100">
+          <h1>
+            Understand any page in{" "}
+            <i className="text-signature-gold font-serif">seconds.</i>
+          </h1>
+        </StaggerItem>
 
-        <motion.p
-          variants={itemVariants}
-          className="text-lg text-stone-400 mb-12 max-w-xl leading-relaxed font-sans"
-        >
-          A gentle open-source tool that reads the long articles for you,
-          extracting beautiful insights and highlighting what actually matters.
-        </motion.p>
+        <StaggerItem className="text-lg text-stone-400 mb-12 max-w-xl leading-relaxed font-sans">
+          <p>
+            A gentle open-source tool that reads the long articles for you,
+            extracting beautiful insights and highlighting what actually
+            matters.
+          </p>
+        </StaggerItem>
 
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-col sm:flex-row gap-4 items-center"
-        >
+        <StaggerItem className="flex flex-col sm:flex-row gap-4 items-center">
           <button className="flex items-center justify-center gap-2 bg-[#ffd60a] text-[#0f0f23] px-8 py-3.5 rounded-full font-medium hover:bg-[#e6c109] transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
             Install Extension
           </button>
@@ -101,16 +65,14 @@ export default function Home() {
           >
             Read the Docs <ArrowRight size={18} />
           </a>
-        </motion.div>
-      </motion.section>
+        </StaggerItem>
+      </Stagger>
 
-      {/* Features Grid */}
-      <motion.section
+      <Reveal
+        as="section"
+        inView
+        y={30}
         className="w-full max-w-5xl mx-auto px-6 py-28 z-10"
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, margin: "-100px" }}
-        transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="grid md:grid-cols-3 gap-8">
           <div className="elegant-glass-card p-8 rounded-3xl flex flex-col gap-4 group">
@@ -152,15 +114,9 @@ export default function Home() {
             </p>
           </div>
         </div>
-      </motion.section>
+      </Reveal>
 
-      {/* Floating Status Widget */}
-      <motion.div
-        className="fixed bottom-6 right-6 z-50"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-      >
+      <Reveal delay={0.5} className="fixed bottom-6 right-6 z-50">
         <div className="elegant-glass px-5 py-3.5 rounded-full flex items-center gap-3">
           <div className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -170,9 +126,8 @@ export default function Home() {
             Proxy Running
           </span>
         </div>
-      </motion.div>
+      </Reveal>
 
-      {/* Soft background glows */}
       <div className="fixed top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-500/5 blur-[120px] pointer-events-none z-0"></div>
       <div className="fixed bottom-[-10%] right-[-10%] w-[40vw] h-[40vw] rounded-full bg-[#ffd60a]/5 blur-[120px] pointer-events-none z-0"></div>
     </main>

@@ -1,13 +1,10 @@
-"use client";
-
-import { motion } from "framer-motion";
-import { ArrowLeft, BookOpen, Key, Download, Settings } from "lucide-react";
+import { ArrowLeft, Key, Download, Settings } from "lucide-react";
 import Link from "next/link";
+import { Reveal } from "@/components/motion";
 
 export default function Docs() {
   return (
     <main className="min-h-screen bg-mesh-dark text-stone-100 font-sans selection:bg-[#ffd60a] selection:text-[#0f0f23] pb-20">
-      {/* Navbar */}
       <nav className="w-full max-w-3xl mx-auto px-6 py-8 flex justify-between items-center">
         <Link
           href="/"
@@ -20,13 +17,8 @@ export default function Docs() {
         </span>
       </nav>
 
-      {/* Content */}
       <article className="max-w-3xl mx-auto px-6 mt-8">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        >
+        <Reveal y={10}>
           <h1 className="font-serif text-4xl md:text-5xl font-normal tracking-tight mb-4 text-stone-100">
             Documentation
           </h1>
@@ -37,7 +29,6 @@ export default function Docs() {
 
           <hr className="border-white/10 mb-12" />
 
-          {/* Section 1 */}
           <section className="mb-16">
             <div className="flex items-center gap-3 mb-4">
               <Download size={20} className="text-stone-400" />
@@ -73,7 +64,6 @@ export default function Docs() {
             </ol>
           </section>
 
-          {/* Section 2 */}
           <section className="mb-16">
             <div className="flex items-center gap-3 mb-4">
               <Key size={20} className="text-stone-400" />
@@ -112,10 +102,10 @@ export default function Docs() {
               </p>
               <pre className="bg-[#0f0f23] text-stone-300 p-4 rounded-xl text-sm overflow-x-auto border border-white/10">
                 <code>GEMINI_API_KEY=your_key_here
-GEMINI_MODEL=gemini-3.1-pro</code>
+GEMINI_MODEL=gemini-3.5-flash-lite</code>
               </pre>
               <p className="text-sm mt-2">
-                (Optional) You can change <code className="bg-white/10 px-1 py-0.5 rounded">GEMINI_MODEL</code> to any other supported model, like <code className="bg-white/10 px-1 py-0.5 rounded">gemini-2.5-pro</code>. If you leave it out, it defaults to <code className="bg-white/10 px-1 py-0.5 rounded">gemini-3.1-pro</code>.
+                (Optional) You can change <code className="bg-white/10 px-1 py-0.5 rounded">GEMINI_MODEL</code> to any other supported model, like <code className="bg-white/10 px-1 py-0.5 rounded">gemini-2.5-pro</code>. If you leave it out, it defaults to <code className="bg-white/10 px-1 py-0.5 rounded">gemini-3.5-flash-lite</code>.
               </p>
               <div className="bg-[#ffd60a]/10 border border-[#ffd60a]/20 p-4 rounded-xl text-sm text-stone-200 flex gap-3 mt-2">
                 <div className="font-bold text-xl mt-[-2px] text-signature-gold">
@@ -130,7 +120,6 @@ GEMINI_MODEL=gemini-3.1-pro</code>
             </div>
           </section>
 
-          {/* Section 3 */}
           <section className="mb-16">
             <div className="flex items-center gap-3 mb-4">
               <Settings size={20} className="text-stone-400" />
@@ -164,7 +153,7 @@ GEMINI_MODEL=gemini-3.1-pro</code>
             You're all set! Open any article online and click the Sumly icon to
             read faster.
           </p>
-        </motion.div>
+        </Reveal>
       </article>
     </main>
   );

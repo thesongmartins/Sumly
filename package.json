@@ -4,9 +4,12 @@
   "private": true,
   "description": "AI Page Summarizer — Chrome Extension + Next.js proxy server in one repo",
   "scripts": {
+    "predev": "lsof -ti tcp:3000 | xargs kill -9 2>/dev/null || true",
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -16,13 +19,17 @@
     "next": "14.2.3",
     "react": "^18",
     "react-dom": "^18",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
+    "jest": "^30.5.0",
+    "jest-environment-jsdom": "^30.5.0",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
     "typescript": "^5"

@@ -1,125 +1,96 @@
 import { NextRequest, NextResponse } from "next/server";
+import { config } from "@/lib/config";
+import { logger } from "@/lib/logger";
+import { corsHeaders, isAuthorized, withTimeout, TimeoutError } from "@/lib/http";
+import { MemoryRateLimiter, MemoryCache } from "@/lib/store";
+import { summarizeRequestSchema, type SummaryResult } from "@/lib/validation";
 
-// Rate limiting: simple in-memory store (use Redis/Upstash for production)
-const rateLimit = new Map<string, { count: number; resetAt: number }>();
+// Swap these for a durable backend (e.g. Upstash) on multi-instance deployments.
+const rateLimiter = new MemoryRateLimiter(
+  config.rateLimit.windowMs,
+  config.rateLimit.max,
+);
+const summaryCache = new MemoryCache<SummaryResult>(config.cache.ttlMs);
 
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-const RATE_LIMIT_MAX = 15; // requests per window
-
-// URL-based summary cache — avoids repeat Gemini calls for the same page
-const summaryCache = new Map<string, { data: unknown; expiresAt: number }>();
-const CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-function getRateLimitKey(req: NextRequest): string {
-  return req.headers.get("x-forwarded-for") || "localhost";
+function clientKey(req: NextRequest): string {
+  // x-forwarded-for may be a comma list — the first entry is the client IP.
+  const fwd = req.headers.get("x-forwarded-for") || "";
+  return fwd.split(",")[0].trim() || "localhost";
 }
 
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const record = rateLimit.get(key);
-
-  if (!record || now > record.resetAt) {
-    rateLimit.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-
-  if (record.count >= RATE_LIMIT_MAX) return false;
-
-  record.count++;
-  return true;
-}
-
-// Handle CORS preflight
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 200,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, X-Extension-Version",
-    },
-  });
+export async function OPTIONS(req: NextRequest) {
+  return new NextResponse(null, { status: 200, headers: corsHeaders(req) });
 }
 
 export async function POST(req: NextRequest) {
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, X-Extension-Version",
-  };
+  const cors = corsHeaders(req);
 
   try {
-    // Rate limiting
-    const clientKey = getRateLimitKey(req);
-    if (!checkRateLimit(clientKey)) {
+    if (!isAuthorized(req)) {
+      return NextResponse.json(
+        { error: "Unauthorized." },
+        { status: 401, headers: cors },
+      );
+    }
+
+    if (!rateLimiter.check(clientKey(req))) {
       return NextResponse.json(
         {
           error:
             "Rate limit exceeded. Please wait before making another request.",
         },
-        { status: 429, headers: corsHeaders },
+        { status: 429, headers: cors },
       );
     }
 
-    // Validate API key exists
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("[PageMind] GEMINI_API_KEY not configured");
+      logger.error("GEMINI_API_KEY not configured");
       return NextResponse.json(
         {
           error:
             "Server not configured. Please set GEMINI_API_KEY in your .env.local file.",
         },
-        { status: 500, headers: corsHeaders },
+        { status: 500, headers: cors },
       );
     }
 
-    // Parse + validate request body
-    let body: {
-      title?: string;
-      url?: string;
-      content?: string;
-      wordCount?: number;
-      metaDescription?: string;
-    };
-
+    let rawBody: unknown;
     try {
-      body = await req.json();
+      rawBody = await req.json();
     } catch {
       return NextResponse.json(
         { error: "Invalid request body." },
-        { status: 400, headers: corsHeaders },
+        { status: 400, headers: cors },
       );
     }
 
-    const { title, url, content, wordCount, metaDescription } = body;
-
-    if (!content || content.trim().length < 50) {
+    const parsed = summarizeRequestSchema.safeParse(rawBody);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Page content is too short or empty to summarize." },
-        { status: 400, headers: corsHeaders },
+        { error: parsed.error.issues[0]?.message || "Invalid request." },
+        { status: 400, headers: cors },
       );
     }
 
-    // Sanitize inputs (strip potential injection attempts)
-    const safeTitle = String(title || "").slice(0, 500);
-    const safeUrl = String(url || "").slice(0, 500);
-    const safeContent = String(content).slice(0, 30000); // ~6000 words max
-    const safeMeta = String(metaDescription || "").slice(0, 500);
+    const { title, url, content, wordCount, metaDescription } = parsed.data;
 
-    // Check URL cache before calling Gemini
+    const safeTitle = (title || "").slice(0, 500);
+    const safeUrl = (url || "").slice(0, 500);
+    const safeContent = content.slice(0, config.gemini.maxContentChars);
+    const safeMeta = (metaDescription || "").slice(0, 500);
+
     if (safeUrl) {
       const cached = summaryCache.get(safeUrl);
-      if (cached && Date.now() < cached.expiresAt) {
-        console.log("[PageMind] Cache hit for:", safeUrl);
+      if (cached) {
+        logger.debug("cache hit", { url: safeUrl });
         return NextResponse.json(
-          { ...(cached.data as object), fromCache: true },
-          { headers: corsHeaders },
+          { ...cached, fromCache: true },
+          { headers: cors },
         );
       }
     }
 
-    // Build the prompt
     const systemPrompt = `You are an expert content analyst. Your job is to read web page content and produce structured summaries.
 
 Always respond with ONLY valid JSON (no markdown, no preamble) in this exact format:
@@ -150,39 +121,43 @@ Meta description: ${safeMeta}
 Content:
 ${safeContent}`;
 
-    // Call Gemini API
     const { GoogleGenerativeAI } = await import("@google/generative-ai");
     const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // Read model from environment or fallback to a valid free-tier model
-    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
-    
     const model = genAI.getGenerativeModel({
-      model: modelName,
+      model: config.gemini.model,
       systemInstruction: systemPrompt,
       generationConfig: {
         responseMimeType: "application/json",
-        maxOutputTokens: 1024,
-        temperature: 0.2,
+        maxOutputTokens: config.gemini.maxOutputTokens,
+        temperature: config.gemini.temperature,
       },
     });
 
     let rawText: string;
     try {
-      const geminiResult = await model.generateContent(userPrompt);
+      const geminiResult = await withTimeout(
+        model.generateContent(userPrompt),
+        config.gemini.timeoutMs,
+      );
       rawText = geminiResult.response.text();
     } catch (apiErr: unknown) {
+      if (apiErr instanceof TimeoutError) {
+        logger.warn("gemini timeout", { ms: config.gemini.timeoutMs });
+        return NextResponse.json(
+          { error: "The AI service took too long to respond. Please try again." },
+          { status: 504, headers: cors },
+        );
+      }
+
       const message =
         apiErr instanceof Error ? apiErr.message : "Gemini API error";
-      console.error("[PageMind] Gemini API error:", message);
+      logger.error("gemini api error", { message });
 
-      // Surface quota/rate-limit errors with a friendly retry hint
       if (
         message.includes("429") ||
         message.includes("Too Many Requests") ||
         message.includes("quota")
       ) {
-        // Match retryDelay field from Gemini error JSON
         const retryMatch = message.match(/"retryDelay"\s*:\s*"(\d+)s"/);
         const retrySeconds = retryMatch ? parseInt(retryMatch[1], 10) : null;
 
@@ -190,7 +165,6 @@ ${safeContent}`;
         if (retrySeconds && retrySeconds <= 300) {
           retryIn = `Please retry in ${retrySeconds} seconds.`;
         } else if (message.includes("limit: 0")) {
-          // Project has zero free-tier quota — billing/plan issue
           retryIn =
             "Your Gemini API free-tier quota is exhausted. Please enable billing at https://ai.dev or wait until tomorrow for the daily quota to reset.";
         } else {
@@ -199,18 +173,17 @@ ${safeContent}`;
 
         return NextResponse.json(
           { error: `Rate limit reached. ${retryIn}` },
-          { status: 429, headers: corsHeaders },
+          { status: 429, headers: cors },
         );
       }
 
       return NextResponse.json(
         { error: `AI service error: ${message}` },
-        { status: 502, headers: corsHeaders },
+        { status: 502, headers: cors },
       );
     }
 
-    // Parse and validate the JSON response
-    let parsed: {
+    let parsedAI: {
       summary?: string[];
       insights?: string[];
       topics?: string[];
@@ -220,56 +193,50 @@ ${safeContent}`;
     };
 
     try {
-      // Strip any accidental markdown fences
       const cleaned = rawText
         .replace(/```json\n?/g, "")
         .replace(/```\n?/g, "")
         .trim();
-      parsed = JSON.parse(cleaned);
+      parsedAI = JSON.parse(cleaned);
     } catch {
-      console.error("[Sumly] Failed to parse AI response:", rawText);
+      logger.error("failed to parse AI response", { rawText });
       return NextResponse.json(
         { error: "AI returned an unexpected response. Please try again." },
-        { status: 502, headers: corsHeaders },
+        { status: 502, headers: cors },
       );
     }
 
-    // Build clean response
-    const result = {
-      summary: Array.isArray(parsed.summary) ? parsed.summary.slice(0, 6) : [],
-      insights: Array.isArray(parsed.insights)
-        ? parsed.insights.slice(0, 3)
+    const result: SummaryResult = {
+      summary: Array.isArray(parsedAI.summary)
+        ? parsedAI.summary.slice(0, 6)
         : [],
-      topics: Array.isArray(parsed.topics) ? parsed.topics.slice(0, 6) : [],
-      highlights: Array.isArray(parsed.highlights)
-        ? parsed.highlights.slice(0, 8)
+      insights: Array.isArray(parsedAI.insights)
+        ? parsedAI.insights.slice(0, 3)
+        : [],
+      topics: Array.isArray(parsedAI.topics) ? parsedAI.topics.slice(0, 6) : [],
+      highlights: Array.isArray(parsedAI.highlights)
+        ? parsedAI.highlights.slice(0, 8)
         : [],
       readingTimeMinutes:
-        typeof parsed.readingTimeMinutes === "number"
-          ? Math.max(1, Math.round(parsed.readingTimeMinutes))
+        typeof parsedAI.readingTimeMinutes === "number"
+          ? Math.max(1, Math.round(parsedAI.readingTimeMinutes))
           : Math.max(1, Math.round((wordCount || 0) / 200)),
       wordCount:
-        typeof parsed.wordCount === "number"
-          ? parsed.wordCount
+        typeof parsedAI.wordCount === "number"
+          ? parsedAI.wordCount
           : wordCount || 0,
       fromCache: false,
     };
 
-    // Store in URL cache for 30 min to avoid redundant Gemini calls
-    if (safeUrl) {
-      summaryCache.set(safeUrl, {
-        data: result,
-        expiresAt: Date.now() + CACHE_TTL_MS,
-      });
-    }
+    if (safeUrl) summaryCache.set(safeUrl, result);
 
-    return NextResponse.json(result, { headers: corsHeaders });
+    return NextResponse.json(result, { headers: cors });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("[PageMind] Unhandled error:", message);
+    logger.error("unhandled error", { message });
     return NextResponse.json(
       { error: "An unexpected error occurred. Please try again." },
-      { status: 500, headers: corsHeaders },
+      { status: 500, headers: cors },
     );
   }
 }
